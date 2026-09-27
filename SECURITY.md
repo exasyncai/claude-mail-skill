@@ -2,7 +2,7 @@
 
 claude-mail-skill logs into a mailbox with a password, so reports are taken seriously.
 
-**Report privately.** Mail security@exasync.ai, or use GitHub's "Report a vulnerability" on this repository (Security tab). Please do not open a public issue for anything that could expose a mailbox. You get an answer within five working days.
+**Report privately.** Use GitHub's "Report a vulnerability" on this repository (Security tab, private to the maintainers), or mail operations@exasync.ai with "security" in the subject. Please do not open a public issue for anything that could expose a mailbox. You get an answer within five working days.
 
 ## What the tool touches
 
