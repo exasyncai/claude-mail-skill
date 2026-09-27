@@ -105,6 +105,20 @@ def test_unknown_client_id_is_explained():
     assert e.value.code == "unauthorized_client" and "client id" in str(e.value)
 
 
+def _wait_listening(port, seconds=10.0):
+    """The receiver binds in its own thread; on a slow runner (macOS CI) it is not up after a fixed sleep."""
+    import socket
+    import time
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.05)
+    return False
+
+
 def _get(url):
     try:
         with urllib.request.urlopen(url, timeout=5) as r:
@@ -125,8 +139,7 @@ def test_receive_code_over_loopback():
 
     t = threading.Thread(target=listen, daemon=True)
     t.start()
-    import time
-    time.sleep(0.2)
+    assert _wait_listening(port)
     status, body = _get(f"http://127.0.0.1:{port}/?code=abc123&state=st-1")
     t.join(5)
     assert status == 200 and b"Done" in body and out.get("code") == "abc123"
@@ -145,8 +158,7 @@ def test_receive_code_rejects_wrong_state_and_reports_error_param():
 
         t = threading.Thread(target=listen, daemon=True)
         t.start()
-        import time
-        time.sleep(0.2)
+        assert _wait_listening(port)
         status, body = _get(f"http://127.0.0.1:{port}/{query}")
         t.join(5)
         assert status == 200 and b"did not complete" in body
