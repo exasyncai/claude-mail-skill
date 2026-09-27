@@ -213,4 +213,4 @@ def test_mailbox_xoauth2_refused_explains_imap_disabled(monkeypatch):
     acc = Account(address="bob@example.com", host="outlook.office365.com", port=993, security="ssl", auth="oauth")
     with pytest.raises(MailboxError) as e:
         Mailbox(acc, "tok").connect()
-    assert "IMAP is switched off" in str(e.value) and "mailskill add" in str(e.value)
+    assert "IMAP is switched off" in str(e.value) and "alias" in str(e.value) and "mailskill add" in str(e.value)
