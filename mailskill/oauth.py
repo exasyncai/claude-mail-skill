@@ -254,6 +254,7 @@ def sign_in(address: str, cid: str, *, open_url=webbrowser.open, listen=receive_
 
 def imap_auth_error(address: str, host: str, err: Exception) -> str:
     """Text for an IMAP AUTHENTICATE failure after a good token."""
-    return (f"Microsoft accepted the sign-in but {host} refused IMAP for {address}: {err}. Usual causes: IMAP is switched off "
-            "for this mailbox (admin: Exchange admin center, the mailbox, Email apps, IMAP) or the mailbox is shared and needs "
-            "its own sign-in. Run: mailskill add <address>  to sign in again after that is fixed.")
+    return (f"Microsoft accepted the sign-in but {host} refused IMAP for {address}: {err}. Usual causes: (1) {address} is an alias; "
+            "IMAP wants the mailbox's primary address, so add that one instead. (2) IMAP is switched off for this mailbox "
+            "(admin: Exchange admin center, the mailbox, Email apps, IMAP). (3) A shared mailbox: keep its address here and sign in "
+            "with an account that has full access to it. Then run: mailskill add <address>  again.")
