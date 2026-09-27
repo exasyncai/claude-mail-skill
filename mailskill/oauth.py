@@ -16,6 +16,7 @@ import http.server
 import json
 import secrets
 import socket
+import socketserver
 import threading
 import urllib.error
 import urllib.parse
@@ -176,6 +177,16 @@ _FAIL_HTML = b"""<!doctype html><html><head><meta charset="utf-8"><title>claude-
 <body><h2>Sign-in did not complete.</h2><p>Close this window and look at the terminal for the reason.</p></body></html>"""
 
 
+class _LoopbackServer(http.server.HTTPServer):
+    """HTTPServer without the reverse DNS lookup in server_bind (socket.getfqdn), which stalls
+    for ten seconds and more on some machines (macOS) and is pointless on 127.0.0.1."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
+
+
 def receive_code(port: int, state: str, timeout: int = SIGNIN_WAIT) -> str:
     """Serve one request on 127.0.0.1:port and return the authorization code from it."""
     result: dict = {}
@@ -204,7 +215,7 @@ def receive_code(port: int, state: str, timeout: int = SIGNIN_WAIT) -> str:
             self.wfile.write(_DONE_HTML if ok else _FAIL_HTML)
             got.set()
 
-    srv = http.server.HTTPServer(("127.0.0.1", port), H)
+    srv = _LoopbackServer(("127.0.0.1", port), H)
     srv.timeout = 1
     t = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.2}, daemon=True)
     t.start()
