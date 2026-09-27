@@ -25,7 +25,7 @@ import webbrowser
 
 # Registered in Entra as a public client with redirect http://localhost. Not a secret.
 # Override per call with --client-id or the environment variable below.
-MS_CLIENT_ID = ""
+MS_CLIENT_ID = "8f6b979a-d88e-4192-9564-ff5d311d0fa6"
 MS_CLIENT_ID_ENV = "MAILSKILL_MS_CLIENT_ID"
 MS_AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0"
 MS_SCOPES = "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
