@@ -9,7 +9,7 @@ def kasserver_like():
     """Folder layout as seen on a Dovecot/All-Inkl box: dot delimiter, UTF-7 names, special-use flags."""
     f = {
         "INBOX": {"attrs": ["\\HasChildren"], "msgs": {}, "next": 1},
-        "INBOX.GV Spedition": {"attrs": ["\\HasNoChildren"], "msgs": {}, "next": 1},
+        "INBOX.Customer Files": {"attrs": ["\\HasNoChildren"], "msgs": {}, "next": 1},
         "Gesendet": {"attrs": ["\\HasNoChildren", "\\Sent"], "msgs": {}, "next": 1},
         "Entw&APw-rfe": {"attrs": ["\\HasNoChildren", "\\Drafts"], "msgs": {}, "next": 1},
         "Papierkorb": {"attrs": ["\\HasNoChildren", "\\Trash"], "msgs": {}, "next": 1},
@@ -59,9 +59,9 @@ def test_resolve_folder_by_role_decoded_name_and_case(box):
 
 def test_select_quotes_names_with_spaces_and_checks_status(box):
     mb, fake = box
-    mb.select("INBOX.GV Spedition")
-    assert fake.selected == "INBOX.GV Spedition"
-    assert any(l.startswith('SELECT "INBOX.GV Spedition"') for l in fake.log)
+    mb.select("INBOX.Customer Files")
+    assert fake.selected == "INBOX.Customer Files"
+    assert any(l.startswith('SELECT "INBOX.Customer Files"') for l in fake.log)
     with pytest.raises(MailboxError) as e:
         mb.select("Does Not Exist")
     assert "not selectable" in str(e.value)

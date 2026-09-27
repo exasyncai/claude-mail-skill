@@ -65,6 +65,16 @@ class FakeIMAP:
             raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Authentication failed.")
         return "OK", [b"Logged in"]
 
+    def authenticate(self, mechanism, authobject):
+        initial = authobject(None)
+        shown = initial.decode("utf-8", "replace").replace("\x01", " ").strip() if isinstance(initial, bytes) else str(initial)
+        self.log.append(f"AUTHENTICATE {mechanism} {shown}")
+        if not self.login_ok or not shown.startswith("user=") or "auth=Bearer " not in shown:
+            import imaplib
+
+            raise imaplib.IMAP4.error("AUTHENTICATE failed.")
+        return "OK", [b"AUTHENTICATE completed."]
+
     def logout(self):
         self.log.append("LOGOUT")
         return "BYE", [b""]

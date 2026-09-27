@@ -4,7 +4,7 @@
 # skill to ~/.claude/skills/mail. Uninstall: rm -rf ~/.claude-mail-skill/app ~/.claude/skills/mail
 set -eu
 REPO="exasyncai/claude-mail-skill"
-VERSION="${MAILSKILL_VERSION:-v0.1.0}"
+VERSION="${MAILSKILL_VERSION:-v0.2.0}"
 HOME_DIR="${MAILSKILL_HOME:-$HOME/.claude-mail-skill}"
 DEST="$HOME_DIR/app"
 ARCHIVE="claude-mail-skill-$VERSION.tar.gz"

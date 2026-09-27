@@ -11,9 +11,10 @@ import os
 import sys
 from pathlib import Path
 
-from . import __version__, store
-from .discover import Candidate, discover
+from . import __version__, setup, store
+from .discover import discover
 from .mailbox import Mailbox, MailboxError, own_part
+from .oauth import OAuthError
 from .util import days_ago, redact, utf7_decode
 
 for _s in (sys.stdout, sys.stderr):  # Windows consoles are cp1252; subjects carry anything
@@ -43,6 +44,13 @@ def _account(args) -> store.Account:
 
 
 def _secret(acc: store.Account) -> str:
+    """Password from the keychain, or for a Microsoft account a fresh access token (silent refresh)."""
+    if acc.auth == "oauth":
+        try:
+            return setup.access_token(acc)
+        except (setup.SetupError, OAuthError) as e:
+            say(str(e), err=True)
+            sys.exit(3)
     s = store.get_secret(acc.address)
     if not s:
         say(f"No mailbox login stored for {acc.address}. Run: mailskill add {acc.address}  "
@@ -76,37 +84,73 @@ def _persist_roles(acc: store.Account):
 # ------------------------------------------------------------------ commands
 
 
+def _report_added(acc: store.Account, folders, where: str):
+    how = "Signed in with Microsoft" if acc.auth == "oauth" else "Login ok"
+    kept = "token" if acc.auth == "oauth" else "secret"
+    say(f"{how}, {len(folders)} folders. The {kept} is stored in: {where} ({store.keyring_backend_name()}).")
+    say(f"Settings: {store.accounts_file()}  (no secret in there)")
+    roles = {f.role: f.name for f in folders if f.role}
+    if roles:
+        say("Folders: " + ", ".join(f"{k}={v}" for k, v in roles.items()))
+    say("Try:  mailskill search --unseen --limit 10")
+
+
 def cmd_add(args):
-    address = args.address.strip().lower()
-    if args.host:
-        cand = Candidate(host=args.host, port=args.port or (143 if args.starttls else 993),
-                         security="starttls" if args.starttls else "ssl", source="manual", username=args.username or "")
-        notes = []
-    else:
-        say(f"Looking up the mail server for {address} ...")
-        try:
-            d = discover(address, verbose=(lambda m: say("  " + m)) if args.verbose else None)
-        except ValueError as e:
-            say(str(e), err=True)
+    address = (args.address or "").strip().lower()
+    use_gui = not args.no_gui and not args.host and not args.dry_run and not args.json and not os.environ.get(store.PW_ENV)
+    if not address and use_gui:
+        from . import gui
+
+        if gui.available():
+            res = gui.run_add_dialog(client_id=args.client_id)
+            if not res:
+                say("Window closed, nothing stored.", err=True)
+                return 1
+            say(f"Added {res['address']} ({res['host']}, {res['folders']} folders). Try:  mailskill search --unseen --limit 10")
+            return 0
+        say("Note: tkinter is not available in this Python, using the terminal instead.")
+    if not address:
+        if not sys.stdin.isatty():
+            say("Usage: mailskill add you@example.com  (no window available here)", err=True)
             return 2
-        for n in d.notes:
-            say("Note: " + n)
-        if not d.chosen:
-            say("No IMAP server answered for this address.", err=True)
-            tried = [f"{c.host}:{c.port} {c.security} ({c.source})" for c in d.candidates]
-            if tried:
-                say("Tried: " + ", ".join(tried[:8]) + (" ..." if len(tried) > 8 else ""), err=True)
-            say("If you know the server: mailskill add {0} --host imap.example.com [--port 993] [--username you]".format(address), err=True)
-            return 1
-        cand = d.chosen
-        if args.username:
-            cand.username = args.username
+        try:
+            address = input("Email address: ").strip().lower()
+        except EOFError:
+            address = ""
+        if not address:
+            say("No address, nothing stored.", err=True)
+            return 2
+
+    say(f"Looking up the mail server for {address} ..." if not args.host else f"Using {args.host} as given.")
+    try:
+        plan = setup.plan_for(address, host=args.host or "", port=args.port or 0, starttls=args.starttls,
+                              username=args.username or "", discover_fn=discover,
+                              verbose=(lambda m: say("  " + m)) if args.verbose else None)
+    except setup.SetupError as e:
+        say(str(e), err=True)
+        return 2
+    for n in plan.notes:
+        say("Note: " + n)
+    if plan.kind == "none":
+        say(plan.hint, err=True)
+        if plan.tried:
+            say("Tried: " + ", ".join(plan.tried[:8]) + (" ..." if len(plan.tried) > 8 else ""), err=True)
+        return 1
+    cand = plan.candidate
+    if cand.source != "manual":
         say(f"Found: {cand.host}:{cand.port} {cand.security} (via {cand.source})")
-    acc = store.Account(address=address, host=cand.host, port=cand.port, security=cand.security,
-                        username=cand.username if cand.username and cand.username != address else "",
-                        provider=cand.provider)
+    acc = setup.account_for(plan)
     if args.dry_run:
         out_json(acc.__dict__) if args.json else say("Dry run: nothing stored.")
+        return 0
+
+    if plan.kind == "oauth":
+        try:
+            acc, folders, where = setup.sign_in_microsoft(plan, client_id=args.client_id, status=say, make_default=args.default)
+        except (setup.SetupError, OAuthError) as e:
+            say(str(e), err=True)
+            return 1
+        _report_added(acc, folders, where)
         return 0
 
     secret = os.environ.get(store.PW_ENV) or ""
@@ -114,39 +158,24 @@ def cmd_add(args):
         if not sys.stdin.isatty():
             say(f"No terminal for the prompt. Export {store.PW_ENV} and run again.", err=True)
             return 3
-        secret = getpass.getpass(f"Mailbox login secret for {acc.login} (app password where the provider needs one): ")
+        if plan.hint:
+            say(plan.hint + (f"  {plan.link}" if plan.link else ""))
+        secret = getpass.getpass(f"Password for {acc.login} (app password where the provider needs one): ")
         if not secret:
             say("Empty input, nothing stored.", err=True)
             return 2
     say(f"Testing login at {acc.host} ...")
-    mb = Mailbox(acc, secret)
     try:
-        mb.connect()
-        folders = mb.folders()
-    except MailboxError as e:
+        folders = setup.test_login(acc, secret)
+    except setup.SetupError as e:
         say(str(e), err=True)
-        if acc.provider == "gmail":
-            say("Gmail refuses normal passwords over IMAP. Create an app password: myaccount.google.com/apppasswords", err=True)
-        elif acc.provider in ("icloud", "yahoo", "fastmail"):
-            say("This provider needs an app-specific password, not your normal one.", err=True)
+        if e.hint:
+            say(e.hint + (f"  {e.link}" if e.link else ""), err=True)
         return 1
-    except Exception as e:
-        say(f"connection failed: {e}", err=True)
-        return 1
-    finally:
-        mb.close()
-    try:
-        where = store.set_secret(acc.address, secret)
-    except RuntimeError as e:
-        say(str(e), err=True)
+    where = setup.finish_password(acc, secret, make_default=args.default)
+    if where.startswith("not stored"):
         say("Login worked; the secret was not stored. Export it per session or install keyring.", err=True)
-        where = "not stored"
-    store.save_account(acc, make_default=args.default or not store.default_address())
-    say(f"Login ok, {len(folders)} folders. Secret stored in: {where} ({store.keyring_backend_name()}).")
-    say(f"Settings: {store.accounts_file()}  (no secret in there)")
-    roles = {f.role: f.name for f in folders if f.role}
-    say("Folders: " + ", ".join(f"{k}={v}" for k, v in roles.items()))
-    say(f"Try:  mailskill search --unseen --limit 10")
+    _report_added(acc, folders, where)
     return 0
 
 
@@ -161,7 +190,8 @@ def cmd_accounts(args):
         return 0
     for a in accs:
         mark = "*" if a.address == default else " "
-        say(f"{mark} {a.address:40} {a.host}:{a.port} {a.security}" + (f"  user={a.username}" if a.username else ""))
+        say(f"{mark} {a.address:40} {a.host}:{a.port} {a.security}" + (f"  user={a.username}" if a.username else "")
+            + ("  (Microsoft sign-in)" if a.auth == "oauth" else ""))
     say(f"Keychain backend: {store.keyring_backend_name()}")
     return 0
 
@@ -451,12 +481,15 @@ def build_parser() -> argparse.ArgumentParser:
         if folder:
             sp.add_argument("--folder", "-f", default="INBOX", help="folder name or role: inbox, sent, drafts, trash, archive")
 
-    s = sub.add_parser("add", help="set up an address: discover the server, test the login, store the secret in the keychain")
-    s.add_argument("address")
+    s = sub.add_parser("add", help="set up an address: without arguments a small window opens; with an address the terminal asks. "
+                                   "Finds the server, tests the login, keeps the secret in the keychain. Microsoft 365 signs in via the browser.")
+    s.add_argument("address", nargs="?", help="email address (omit it to get the window)")
     s.add_argument("--host"); s.add_argument("--port", type=int); s.add_argument("--starttls", action="store_true")
     s.add_argument("--username", help="login name if it is not the address")
     s.add_argument("--default", action="store_true", help="make this the default account")
     s.add_argument("--dry-run", action="store_true", help="discover and print, store nothing")
+    s.add_argument("--no-gui", action="store_true", help="never open a window, ask in the terminal")
+    s.add_argument("--client-id", help=f"Microsoft app (client) id, overrides {setup.oauth.MS_CLIENT_ID_ENV} and the built-in one")
     s.add_argument("--verbose", "-v", action="store_true"); s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_add)
 
@@ -516,7 +549,7 @@ def main(argv=None) -> int:
         return int(e.code or 0)
     except KeyboardInterrupt:
         return 130
-    except MailboxError as e:
+    except (MailboxError, OAuthError) as e:
         say(str(e), err=True)
         return 1
 

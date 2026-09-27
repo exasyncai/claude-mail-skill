@@ -137,10 +137,19 @@ class Mailbox:
         else:
             c = imaplib.IMAP4(a.host, a.port, timeout=self.timeout)
             c.starttls(ssl_context=ctx)
-        try:
-            c.login(a.login, self._secret)
-        except imaplib.IMAP4.error as e:
-            raise MailboxError(f"login refused for {a.login} at {a.host}: {e}") from e
+        if a.auth == "oauth":
+            from .oauth import imap_auth_error, xoauth2_string
+
+            initial = xoauth2_string(a.login, self._secret)
+            try:
+                c.authenticate("XOAUTH2", lambda _challenge: initial)
+            except imaplib.IMAP4.error as e:
+                raise MailboxError(imap_auth_error(a.login, a.host, e)) from e
+        else:
+            try:
+                c.login(a.login, self._secret)
+            except imaplib.IMAP4.error as e:
+                raise MailboxError(f"login refused for {a.login} at {a.host}: {e}") from e
         self.conn = c
         return self
 
