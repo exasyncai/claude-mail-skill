@@ -144,7 +144,7 @@ def test_add_microsoft_account_via_browser(home, memkeyring, monkeypatch, capsys
     assert "Signed in with Microsoft" in out and "token is stored" in out
     acc = store.get_account("bob@corp.example")
     assert acc.auth == "oauth" and acc.host == "outlook.office365.com"
-    assert memkeyring.get_password(store.SERVICE, "oauth:bob@corp.example") == "rt-live"
+    assert store.get_refresh_token("bob@corp.example") == "rt-live"
     assert memkeyring.get_password(store.SERVICE, "bob@corp.example") is None
     rc, out, _ = run(capsys, "accounts")
     assert "(Microsoft sign-in)" in out
@@ -153,7 +153,7 @@ def test_add_microsoft_account_via_browser(home, memkeyring, monkeypatch, capsys
     monkeypatch.setenv(setup.oauth.MS_CLIENT_ID_ENV, "cid-test")
     rc, out, _ = run(capsys, "folders", "--json")
     assert rc == 0 and fake.log[-2].startswith("AUTHENTICATE XOAUTH2 user=bob@corp.example auth=Bearer at-2")
-    assert memkeyring.get_password(store.SERVICE, "oauth:bob@corp.example") == "rt-2"
+    assert store.get_refresh_token("bob@corp.example") == "rt-2"
     # revoked: refresh fails with a clear sentence, exit 3
     from mailskill.oauth import OAuthError
     monkeypatch.setattr(setup.oauth, "refresh", lambda cid, rt: (_ for _ in ()).throw(OAuthError("sign in again please", code="invalid_grant")))

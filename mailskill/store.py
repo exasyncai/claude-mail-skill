@@ -157,7 +157,10 @@ def set_secret(address: str, secret: str) -> str:
     if not kr:
         raise RuntimeError("no keychain backend available; install the keyring package "
                            f"(python -m pip install --user keyring) or export {PW_ENV} for this session")
-    kr.set_password(SERVICE, address.lower(), secret)
+    try:
+        kr.set_password(SERVICE, address.lower(), secret)
+    except Exception as e:
+        raise RuntimeError(f"the keychain refused the entry: {e}") from e
     return "keyring"
 
 
@@ -185,21 +188,50 @@ def delete_secret(address: str) -> None:
 
 
 # ------------------------------------------------------------------ oauth refresh tokens
+#
+# Windows Credential Manager caps one entry at 2560 bytes (UTF-16, so about 1200 characters);
+# a Microsoft refresh token is longer. The token is stored in numbered chunks: oauth:<addr>#0, #1 ...
+
+CHUNK = 1000
 
 
 def set_refresh_token(address: str, token: str) -> str:
-    return set_secret(OAUTH_PREFIX + address.lower(), token)
+    base = OAUTH_PREFIX + address.lower()
+    delete_refresh_token(address)
+    parts = [token[i:i + CHUNK] for i in range(0, len(token), CHUNK)] or [""]
+    where = ""
+    for n, part in enumerate(parts):
+        where = set_secret(f"{base}#{n}", part)
+    set_secret(base, str(len(parts)))
+    return where
 
 
 def get_refresh_token(address: str) -> str | None:
     kr = _keyring()
     if not kr:
         return None
+    base = OAUTH_PREFIX + address.lower()
     try:
-        return kr.get_password(SERVICE, OAUTH_PREFIX + address.lower())
+        count = kr.get_password(SERVICE, base)
+        if not count:
+            return None
+        parts = [kr.get_password(SERVICE, f"{base}#{n}") for n in range(int(count))]
     except Exception:
         return None
+    if any(p is None for p in parts):
+        return None
+    return "".join(parts)
 
 
 def delete_refresh_token(address: str) -> None:
-    delete_secret(OAUTH_PREFIX + address.lower())
+    kr = _keyring()
+    if not kr:
+        return
+    base = OAUTH_PREFIX + address.lower()
+    try:
+        count = int(kr.get_password(SERVICE, base) or 0)
+    except Exception:
+        count = 0
+    for n in range(max(count, 1)):
+        delete_secret(f"{base}#{n}")
+    delete_secret(base)
