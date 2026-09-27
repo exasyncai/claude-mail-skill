@@ -1,0 +1,10 @@
+{
+  "folder": "INBOX",
+  "rules": [
+    {"name": "newsletters older than a week", "from": ["news@", "newsletter@", "@mailchimp.com", "@substack.com"], "older_than_days": 7, "action": "move", "to": "archive"},
+    {"name": "notifications", "subject": ["[GitHub]", "Your order", "Rechnung", "Invoice"], "older_than_days": 3, "action": "move", "to": "archive"},
+    {"name": "read and old", "seen": true, "older_than_days": 60, "action": "move", "to": "archive"},
+    {"name": "flag the boss", "from": ["boss@example.com"], "action": "flag"},
+    {"name": "obvious junk", "from": ["@spammy.example"], "action": "trash"}
+  ]
+}
