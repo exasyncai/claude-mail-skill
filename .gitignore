@@ -4,3 +4,4 @@ __pycache__/
 out/
 *.log
 .venv/
+tools/check_text.local
