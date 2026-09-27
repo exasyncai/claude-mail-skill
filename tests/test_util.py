@@ -36,7 +36,7 @@ def test_dates():
 def test_quote_mailbox():
     assert quote_mailbox("INBOX") == "INBOX"
     assert quote_mailbox("INBOX/Erledigt") == "INBOX/Erledigt"
-    assert quote_mailbox("INBOX.GV Spedition") == '"INBOX.GV Spedition"'
+    assert quote_mailbox("INBOX.Customer Files") == '"INBOX.Customer Files"'
     assert quote_mailbox('"already"') == '"already"'
     assert quote_mailbox('say "hi"') == '"say \\"hi\\""'
 
