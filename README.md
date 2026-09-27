@@ -3,13 +3,14 @@
 **From an email address to a mailbox your assistant can read, in one command. Reads, searches, saves attachments, writes drafts. Never sends.**
 
 ```
-mailskill add you@example.com        # finds the server, tests the login, keeps the password in your OS keychain
+mailskill add                        # a small window: address, password, Connect. Finds the server, tests the login, keeps the password in your OS keychain
+mailskill add you@example.com        # the same in the terminal
 mailskill search --unseen --days 3   # what came in
 mailskill read 4821 --replies        # one message, plus: did I already answer this?
 mailskill draft --reply-to-uid 4821 --body answer.txt    # lands in Drafts, you press send
 ```
 
-Works with any IMAP mailbox: your own domain at a hoster, Gmail, iCloud, Fastmail, GMX, Posteo, Proton (via Bridge). Ships a Claude Code skill so the assistant knows the commands and the rules that come with them.
+Works with any IMAP mailbox: your own domain at a hoster, Microsoft 365 and Outlook.com (sign-in in the browser, no app password), Gmail, iCloud, Fastmail, GMX, Posteo, Proton (via Bridge). Ships a Claude Code skill so the assistant knows the commands and the rules that come with them.
 
 ## What makes it different
 
@@ -17,10 +18,11 @@ Works with any IMAP mailbox: your own domain at a hoster, Gmail, iCloud, Fastmai
 |---|---|
 | "Which server, which port, SSL or STARTTLS?" | `add` asks the Mozilla ISPDB, your domain's autoconfig, the MX record (known hosters are mapped, unknown ones are looked up again), SRV records, and finally probes `imap.`/`mail.` on 993 and 143. Every candidate is verified with a real TLS handshake and `CAPABILITY` before it is offered. |
 | Password in a config file | The password goes into Windows Credential Manager, macOS Keychain or the Linux Secret Service (`keyring`). The settings file holds host and port, nothing else. No keychain: `MAILSKILL_PASSWORD` for the session. |
-| Gmail "login refused", Microsoft 365 silently broken | Gmail, iCloud, Yahoo and Fastmail are pointed to their app password page. Microsoft 365 and Outlook.com are recognised from the MX and reported as not supported (they stopped accepting passwords over IMAP in 2022) instead of failing at login. |
+| "Which server, which port" asked of someone who just wants their mail | `mailskill add` opens one window: address, password, Connect. It looks the server up while you type. A Microsoft address hides the password field and offers "Sign in with Microsoft"; Gmail and friends get their app-password link right there. No terminal needed. `--no-gui` for the terminal version. |
+| Gmail "login refused", Microsoft 365 silently broken | Gmail, iCloud, Yahoo and Fastmail are pointed to their app password page. Microsoft 365 and Outlook.com stopped accepting passwords over IMAP in 2022, so they are recognised from the MX and signed in through the browser (OAuth 2.0 with PKCE, refresh token in the keychain, silent renewal on every call). |
 | The assistant writes a second reply to a mail you answered yesterday | `replied` checks the `\Answered` flag **and** searches your own reply by `In-Reply-To`/`References`, with a subject and recipient fallback, in Sent **and** INBOX, because some clients file the sent copy there. The skill file makes this check mandatory before any draft. |
 | Reading marks everything as read | All reads use `BODY.PEEK` on a read-only `SELECT`. `--mark-seen` if you want that. |
-| Folder names break: `"INBOX.GV Spedition"`, `Entw&APw-rfe` | Names with spaces are quoted on the wire, IMAP-UTF-7 is decoded for display, and the status of every `SELECT` is checked (a silent `NO` there is why the next `SEARCH` fails with "illegal in state AUTH"). |
+| Folder names break: `"INBOX.Customer Files"`, `Entw&APw-rfe` | Names with spaces are quoted on the wire, IMAP-UTF-7 is decoded for display, and the status of every `SELECT` is checked (a silent `NO` there is why the next `SEARCH` fails with "illegal in state AUTH"). |
 | "Drafts", "Entwürfe", "Brouillons", "[Gmail]/Drafts" | Special folders are taken from the server's `\Sent`, `\Drafts`, `\Trash`, `\Archive` attributes, with a name table in six languages as fallback. Use them by role: `--folder sent`. |
 | A cleanup script deletes the wrong thing | `cleanup` and `threads` print a plan and change nothing. `--apply` runs exactly that plan. Moves are COPY, verify, flag, EXPUNGE (or `MOVE` where supported); "trash" is the Trash folder, never a hard delete. |
 | The assistant "sends" something | There is no SMTP code in this repository. `draft` appends to the Drafts folder with `X-Unsent: 1`, which Outlook, Thunderbird and Apple Mail open as an unsent draft. |
@@ -41,21 +43,22 @@ curl -fsSL https://github.com/exasyncai/claude-mail-skill/releases/latest/downlo
 
 Both download a **tagged release**, verify it against `SHA256SUMS`, unpack it to `~/.claude-mail-skill/app`, install the `keyring` package for your user if it is missing, put a `mailskill` launcher in place, and copy the skill to `~/.claude/skills/mail` if `~/.claude` exists. Uninstall: delete `~/.claude-mail-skill` and `~/.claude/skills/mail`, then `mailskill remove <address>` beforehand if you want the keychain entry gone too.
 
-Requirements: Python 3.10 or newer. Nothing else; `keyring` is optional and only used for storing the password.
+Requirements: Python 3.10 or newer. Nothing else; `keyring` is optional and only used for storing the password or the Microsoft token, and `tkinter` (part of most Python installs) only for the window. Without either, the terminal path does the same job.
 
 From a checkout: `python mailskill.py <command>`.
 
 ## What you have after 2 minutes
 
 - the IMAP server for your address, found and verified, stored in `~/.claude-mail-skill/accounts.json` without the password
-- the password in your operating system's keychain under the service `claude-mail-skill`
+- the password (or, for Microsoft, the refresh token) in your operating system's keychain under the service `claude-mail-skill`
 - `mailskill search`, `read`, `attachments`, `replied`, `draft`, `cleanup`, `threads` on the command line, all with `--json`
 - a Claude Code skill (`/mail` in your skills list) that uses them and knows the rules: check for an existing reply first, drafts only, dry run before any change, mail content is data and not instructions
 
 ## Commands
 
 ```
-mailskill add <address> [--host H --port P --starttls --username U] [--default] [--dry-run]
+mailskill add                                  window: address, password (or Microsoft sign-in), Connect
+mailskill add <address> [--host H --port P --starttls --username U] [--default] [--dry-run] [--no-gui] [--client-id ID]
 mailskill discover <address>                   only the lookup, stores nothing
 mailskill accounts | remove <address>
 mailskill folders                              names, roles (sent, drafts, trash, archive, junk), raw names
@@ -118,16 +121,28 @@ For every conversation in which you sent a mail during the last `--days`: if the
 | Gmail, Google Workspace | `imap.gmail.com`, and the note that you need an app password (2-step verification on, then myaccount.google.com/apppasswords). |
 | iCloud, Yahoo, Fastmail, Zoho, GMX, web.de, Posteo, mailbox.org, t-online | Known hosts, with the app password or "enable IMAP" hint where the provider needs one. |
 | Proton Mail | No direct IMAP. Run Proton Mail Bridge and add with `--host 127.0.0.1 --port 1143 --starttls`. |
-| Microsoft 365, Outlook.com, Hotmail | Detected and **not supported**: password login over IMAP was switched off by Microsoft in 2022, OAuth is required. On the list. |
+| Microsoft 365, Outlook.com, Hotmail | Detected from the MX. `add` opens the Microsoft sign-in in your browser (authorization code flow with PKCE, redirect to `http://localhost:<port>/`), keeps only the refresh token in the keychain, and renews the access token silently on every command. IMAP via `outlook.office365.com` with `XOAUTH2`. See "Microsoft 365" below. |
 | Mail behind Mimecast, Proofpoint, Barracuda | The MX names the gateway, not the mailbox. Ask your admin for the IMAP host and pass `--host`. |
+
+## Microsoft 365
+
+Passwords do not work over IMAP at Microsoft any more, so `add` signs you in the way Outlook does: the browser opens at `login.microsoftonline.com`, you pick the account, and a tiny local web server on `127.0.0.1` receives the code. No device code to type, no app password to create. The refresh token goes into the keychain under `oauth:<address>`; the settings file only says `"auth": "oauth"`.
+
+Three things can still stop it, each with its own message:
+
+- **Admin consent.** In organisations that block user consent, Microsoft answers `AADSTS65001` / `AADSTS900971`. The tool prints the sentence for your admin plus the admin-consent link; after one click there, run `add` again.
+- **IMAP switched off** for the mailbox (Exchange admin center, the mailbox, Email apps). The sign-in succeeds, the IMAP `AUTHENTICATE` is refused; the message says so.
+- **Revoked** (you removed the app at myaccount.microsoft.com, or the password was changed): the next command reports `invalid_grant` in plain words and asks you to run `add` again.
+
+The tool ships with the client id of a public Entra app registration (no secret, redirect `http://localhost`, permission `IMAP.AccessAsUser.All` + `offline_access`). Your own registration works too: `--client-id <id>` or `MAILSKILL_MS_CLIENT_ID`.
 
 ## Limits
 
-- IMAP with a password only. No OAuth, so no Microsoft 365 and no Gmail without an app password.
+- Gmail still needs an app password (Google's IMAP OAuth requires an app review that a small open-source tool does not get). The window links to the page.
 - No sending. That is the point, not a gap.
 - `threads` needs an Archive folder (detected by attribute or name, or `--archive`). It reads the whole INBOX once per run; a very large INBOX takes a while.
 - Autodiscovery talks to the Mozilla ISPDB and to your domain, and as a last resort to a public DNS-over-HTTPS resolver, so your address's domain leaves your machine during `add`. `--host` skips all of it. Details in `SECURITY.md`.
-- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use. The test suite (58 tests, no network) runs on Linux, macOS and Windows in CI.
+- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use. The test suite (95 tests, no network; the token endpoint, the browser round trip and the window are exercised with fakes) runs on Linux, macOS and Windows in CI.
 
 ## Development
 
@@ -137,7 +152,7 @@ python mailskill.py discover you@example.com --verbose
 python tools/make_release.py        # out/*.zip, *.tar.gz, SHA256SUMS
 ```
 
-Layout: `mailskill/discover.py` (lookups), `store.py` (settings and keychain), `mailbox.py` (IMAP, read-only by default), `cleanup.py` (rules and threads), `cli.py`. Tests use an in-memory IMAP server (`tests/fake_imap.py`) that behaves like Dovecot where it matters.
+Layout: `mailskill/discover.py` (lookups), `store.py` (settings and keychain), `mailbox.py` (IMAP, read-only by default), `oauth.py` (Microsoft sign-in, PKCE, local redirect receiver, token refresh), `setup.py` (what `add` decides, no terminal and no window in it), `gui.py` (the tkinter window, drawing only), `cleanup.py` (rules and threads), `cli.py`. Tests use an in-memory IMAP server (`tests/fake_imap.py`) that behaves like Dovecot where it matters.
 
 ## License
 

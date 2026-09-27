@@ -3,7 +3,7 @@
 # ~\.claude\skills\mail. Uninstall: delete those two folders.
 $ErrorActionPreference = "Stop"
 $Repo = "exasyncai/claude-mail-skill"
-$Version = if ($env:MAILSKILL_VERSION) { $env:MAILSKILL_VERSION } else { "v0.1.0" }
+$Version = if ($env:MAILSKILL_VERSION) { $env:MAILSKILL_VERSION } else { "v0.2.0" }
 $HomeDir = if ($env:MAILSKILL_HOME) { $env:MAILSKILL_HOME } else { Join-Path $HOME ".claude-mail-skill" }
 $Dest = Join-Path $HomeDir "app"
 $Archive = "claude-mail-skill-$Version.zip"

@@ -4,6 +4,8 @@ Settings: ~/.claude-mail-skill/accounts.json, mode 600 where the OS supports it.
 Secret: keyring service "claude-mail-skill", username = the address.
 Without keyring (or in a container) the secret is read from the environment
 variable named in PW_ENV, never from a file.
+Microsoft accounts (auth="oauth") keep a refresh token instead of a password,
+under the keyring username "oauth:<address>". It is never read from the environment.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from pathlib import Path
 
 SERVICE = "claude-mail-skill"
 PW_ENV = "MAILSKILL_PASSWORD"
+OAUTH_PREFIX = "oauth:"
 
 
 def home_dir() -> Path:
@@ -33,6 +36,7 @@ class Account:
     security: str            # "ssl" | "starttls"
     username: str = ""       # "" -> address
     provider: str = ""
+    auth: str = "password"   # "password" | "oauth" (Microsoft sign-in, token in the keychain)
     sent_folder: str = ""    # discovered on first use, cached here
     drafts_folder: str = ""
     trash_folder: str = ""
@@ -118,6 +122,7 @@ def remove_account(address: str) -> bool:
         d["default"] = next(iter(d["accounts"]), "")
     _write(d)
     delete_secret(addr)
+    delete_refresh_token(addr)
     return True
 
 
@@ -177,3 +182,24 @@ def delete_secret(address: str) -> None:
         kr.delete_password(SERVICE, address.lower())
     except Exception:
         pass
+
+
+# ------------------------------------------------------------------ oauth refresh tokens
+
+
+def set_refresh_token(address: str, token: str) -> str:
+    return set_secret(OAUTH_PREFIX + address.lower(), token)
+
+
+def get_refresh_token(address: str) -> str | None:
+    kr = _keyring()
+    if not kr:
+        return None
+    try:
+        return kr.get_password(SERVICE, OAUTH_PREFIX + address.lower())
+    except Exception:
+        return None
+
+
+def delete_refresh_token(address: str) -> None:
+    delete_secret(OAUTH_PREFIX + address.lower())

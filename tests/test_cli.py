@@ -130,6 +130,43 @@ def test_add_manual_host_login_refused(home, memkeyring, monkeypatch, capsys):
     assert store.list_accounts() == []
 
 
+def test_add_microsoft_account_via_browser(home, memkeyring, monkeypatch, capsys):
+    fake = FakeIMAP({"INBOX": {"attrs": [], "msgs": {}, "next": 1}, "Sent Items": {"attrs": ["\\Sent"], "msgs": {}, "next": 1}})
+    import mailskill.mailbox as mm
+    from mailskill import setup
+
+    monkeypatch.setattr(mm.imaplib, "IMAP4_SSL", lambda *a, **k: fake)
+    chosen = Candidate(host="outlook.office365.com", port=993, security="ssl", source="mx", provider="microsoft365", verified=True)
+    monkeypatch.setattr(cli, "discover", lambda addr, verbose=None: Discovery(addr, "corp.example", ["corp.mail.protection.outlook.com"], [chosen], chosen, ["m365"]))
+    monkeypatch.setattr(setup.oauth, "sign_in", lambda addr, cid, status, **k: {"access_token": "at-live", "refresh_token": "rt-live"})
+    rc, out, err = run(capsys, "add", "bob@corp.example", "--client-id", "cid-test")
+    assert rc == 0, err
+    assert "Signed in with Microsoft" in out and "token is stored" in out
+    acc = store.get_account("bob@corp.example")
+    assert acc.auth == "oauth" and acc.host == "outlook.office365.com"
+    assert memkeyring.get_password(store.SERVICE, "oauth:bob@corp.example") == "rt-live"
+    assert memkeyring.get_password(store.SERVICE, "bob@corp.example") is None
+    rc, out, _ = run(capsys, "accounts")
+    assert "(Microsoft sign-in)" in out
+    # later command: silent refresh, then XOAUTH2
+    monkeypatch.setattr(setup.oauth, "refresh", lambda cid, rt: {"access_token": "at-2", "refresh_token": "rt-2"})
+    monkeypatch.setenv(setup.oauth.MS_CLIENT_ID_ENV, "cid-test")
+    rc, out, _ = run(capsys, "folders", "--json")
+    assert rc == 0 and fake.log[-2].startswith("AUTHENTICATE XOAUTH2 user=bob@corp.example auth=Bearer at-2")
+    assert memkeyring.get_password(store.SERVICE, "oauth:bob@corp.example") == "rt-2"
+    # revoked: refresh fails with a clear sentence, exit 3
+    from mailskill.oauth import OAuthError
+    monkeypatch.setattr(setup.oauth, "refresh", lambda cid, rt: (_ for _ in ()).throw(OAuthError("sign in again please", code="invalid_grant")))
+    rc, out, err = run(capsys, "folders")
+    assert rc == 3 and "sign in again" in err
+
+
+def test_add_without_address_and_without_terminal(home, memkeyring, monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    rc, out, err = run(capsys, "add", "--no-gui")
+    assert rc == 2 and "mailskill add you@example.com" in err
+
+
 def test_add_nothing_found(home, memkeyring, monkeypatch, capsys):
     monkeypatch.setattr(cli, "discover", lambda addr, verbose=None: Discovery(addr, "dead.example", [], [Candidate("imap.dead.example", 993, "ssl", "guess")], None, []))
     rc, out, err = run(capsys, "add", "bob@dead.example")

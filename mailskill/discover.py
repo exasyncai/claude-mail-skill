@@ -27,10 +27,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict, field
 
 TIMEOUT = 8
-USER_AGENT = "claude-mail-skill/0.1 (+https://github.com/exasyncai/claude-mail-skill)"
+USER_AGENT = "claude-mail-skill/0.2 (+https://github.com/exasyncai/claude-mail-skill)"
 
-M365_NOTE = ("Microsoft 365 and Outlook.com no longer accept passwords over IMAP (basic auth was switched off in 2022). "
-             "This tool speaks IMAP with a password only, so this mailbox is not supported yet. OAuth support is on the list.")
+M365_NOTE = ("Microsoft 365 / Outlook.com mailbox: Microsoft accepts no passwords over IMAP since 2022, so the sign-in "
+             "happens in your browser (OAuth). No app password needed.")
 
 # MX suffix -> (imap host, port, security, provider id, note)
 KNOWN_MX = {
@@ -375,8 +375,6 @@ def discover(address: str, *, probe_fn=probe, fetch_fn=fetch_url, mx_fn=resolve_
     # verify in order, first hit wins
     chosen = None
     for c in cands:
-        if pid == "microsoft365" and c.host == "outlook.office365.com":
-            continue   # would connect fine and then refuse every password; do not present it as working
         say(f"probe {c.host}:{c.port} {c.security} ({c.source})")
         caps = probe_fn(c.host, c.port, c.security)
         if caps is None:
@@ -387,8 +385,8 @@ def discover(address: str, *, probe_fn=probe, fetch_fn=fetch_url, mx_fn=resolve_
         if "IMAP4REV1" in upper or "IMAP4REV2" in upper or not caps:
             chosen = c
             break
-    if chosen is None and pid == "microsoft365":
-        notes.append("No usable IMAP server found for a password login.")
+    if chosen is not None and pid == "microsoft365" and chosen.host == "outlook.office365.com":
+        chosen.provider = "microsoft365"
     return Discovery(address=address, domain=domain, mx=mx, candidates=cands, chosen=chosen, notes=notes)
 
 

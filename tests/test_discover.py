@@ -92,13 +92,12 @@ def test_discover_srv_records():
     assert d.chosen and (d.chosen.host, d.chosen.port, d.chosen.source) == ("imap.srv.example", 9993, "srv")
 
 
-def test_discover_microsoft365_is_not_presented_as_working():
+def test_discover_microsoft365_is_chosen_with_oauth_note():
     probe = _probe_factory({("outlook.office365.com", 993)})
     d = discover("bob@corp.example", probe_fn=probe, fetch_fn=lambda url: None,
                  mx_fn=lambda dom: ["corp-example.mail.protection.outlook.com"], srv_fn=lambda n: [])
-    assert d.chosen is None
-    assert not any(c[0] == "outlook.office365.com" for c in probe.calls)
-    assert any("OAuth" in n for n in d.notes)
+    assert d.chosen and d.chosen.host == "outlook.office365.com" and d.chosen.provider == "microsoft365"
+    assert d.chosen.verified and any("browser" in n for n in d.notes)
 
 
 def test_discover_nothing_found():
