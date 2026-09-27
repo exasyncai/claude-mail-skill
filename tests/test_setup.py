@@ -135,3 +135,14 @@ def test_old_accounts_file_without_auth_field(home, memkeyring):
     home.mkdir(parents=True)
     store.accounts_file().write_text('{"default": "a@b.c", "accounts": {"a@b.c": {"address": "a@b.c", "host": "h", "port": 993, "security": "ssl"}}}', encoding="utf-8")
     assert store.get_account().auth == "password"
+
+
+def test_refresh_token_is_chunked_for_windows_credential_manager(home, memkeyring):
+    long = "x" * 2600 + "END"
+    assert store.set_refresh_token("bob@corp.example", long) == "keyring"
+    assert all(len(v) <= store.CHUNK for v in memkeyring.data.values())
+    assert store.get_refresh_token("bob@corp.example") == long
+    store.set_refresh_token("bob@corp.example", "short")          # fewer chunks: old ones are gone
+    assert store.get_refresh_token("bob@corp.example") == "short" and len(memkeyring.data) == 2
+    store.delete_refresh_token("bob@corp.example")
+    assert store.get_refresh_token("bob@corp.example") is None and memkeyring.data == {}
