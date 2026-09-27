@@ -1,20 +1,17 @@
 ---
 name: Something went wrong
-about: A step failed or behaved differently than the README says
+about: A command failed or behaved differently than the README says
 ---
 
-**Step that failed** (setup / install / verify / harden / other):
+**Command that failed** (`add` / `discover` / `search` / `read` / `draft` / `cleanup` / `threads` / install):
 
-**Client OS and shell:**
+**Operating system and shell:**
 
-**Server OS and version** (`lsb_release -d`, or `winver`):
+**Mail provider** (own domain at a hoster, Microsoft 365, Gmail, ...; no address needed):
 
-**Output** (run the step again with `--dry-run` if it supports it; remove addresses you do not want public):
-
-```
-```
-
-**Server log** (`/var/log/ssh-bridge.log` or `C:\ProgramData\ssh-bridge\ssh-bridge.log`):
+**Output** (run the command again with `--verbose` where it exists; replace addresses and folder names you do not want public):
 
 ```
 ```
+
+**What you expected instead:**
