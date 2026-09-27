@@ -142,7 +142,7 @@ The tool ships with the client id of a public Entra app registration (no secret,
 - No sending. That is the point, not a gap.
 - `threads` needs an Archive folder (detected by attribute or name, or `--archive`). It reads the whole INBOX once per run; a very large INBOX takes a while.
 - Autodiscovery talks to the Mozilla ISPDB and to your domain, and as a last resort to a public DNS-over-HTTPS resolver, so your address's domain leaves your machine during `add`. `--host` skips all of it. Details in `SECURITY.md`.
-- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use. The test suite (95 tests, no network; the token endpoint, the browser round trip and the window are exercised with fakes) runs on Linux, macOS and Windows in CI.
+- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use. The test suite (96 tests, no network; the token endpoint, the browser round trip and the window are exercised with fakes) runs on Linux, macOS and Windows in CI.
 
 ## Development
 
