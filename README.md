@@ -121,7 +121,7 @@ For every conversation in which you sent a mail during the last `--days`: if the
 | Gmail, Google Workspace | `imap.gmail.com`, and the note that you need an app password (2-step verification on, then myaccount.google.com/apppasswords). |
 | iCloud, Yahoo, Fastmail, Zoho, GMX, web.de, Posteo, mailbox.org, t-online | Known hosts, with the app password or "enable IMAP" hint where the provider needs one. |
 | Proton Mail | No direct IMAP. Run Proton Mail Bridge and add with `--host 127.0.0.1 --port 1143 --starttls`. |
-| Microsoft 365, Outlook.com, Hotmail | Detected from the MX. `add` opens the Microsoft sign-in in your browser (authorization code flow with PKCE, redirect to `http://localhost:<port>/`), keeps only the refresh token in the keychain, and renews the access token silently on every command. IMAP via `outlook.office365.com` with `XOAUTH2`. See "Microsoft 365" below. |
+| Microsoft 365, Outlook.com, Hotmail | Detected from the MX. Own mailbox, shared mailbox (sign in as yourself) and the alias case are covered, see "Microsoft 365" below. `add` opens the Microsoft sign-in in your browser (authorization code flow with PKCE, redirect to `http://localhost:<port>/`), keeps only the refresh token in the keychain, and renews the access token silently on every command. IMAP via `outlook.office365.com` with `XOAUTH2`. See "Microsoft 365" below. |
 | Mail behind Mimecast, Proofpoint, Barracuda | The MX names the gateway, not the mailbox. Ask your admin for the IMAP host and pass `--host`. |
 
 ## Microsoft 365
@@ -134,6 +134,14 @@ Three things can still stop it, each with its own message:
 - **IMAP switched off** for the mailbox (Exchange admin center, the mailbox, Email apps). The sign-in succeeds, the IMAP `AUTHENTICATE` is refused; the message says so.
 - **Revoked** (you removed the app at myaccount.microsoft.com, or the password was changed): the next command reports `invalid_grant` in plain words and asks you to run `add` again.
 
+Three kinds of Microsoft addresses, verified against real mailboxes:
+
+- **Your own mailbox** (`you@company.com`): sign in as yourself. Done.
+- **A shared mailbox** (`support@company.com`, no login of its own): run `mailskill add support@company.com` and sign in with **your** account in the browser. The token is yours, IMAP is opened as the shared mailbox; that works when your account has full access to it.
+- **An alias** (`info@company.com` that only forwards into your mailbox): IMAP wants the mailbox's primary address, so add that one. The refusal message says so.
+
+An account that has a licence but no Exchange mailbox is refused by IMAP as well; the admin center is where that is fixed, not the tool.
+
 The tool ships with the client id of a public Entra app registration (no secret, redirect `http://localhost`, permission `IMAP.AccessAsUser.All` + `offline_access`). Your own registration works too: `--client-id <id>` or `MAILSKILL_MS_CLIENT_ID`.
 
 ## Limits
@@ -142,7 +150,7 @@ The tool ships with the client id of a public Entra app registration (no secret,
 - No sending. That is the point, not a gap.
 - `threads` needs an Archive folder (detected by attribute or name, or `--archive`). It reads the whole INBOX once per run; a very large INBOX takes a while.
 - Autodiscovery talks to the Mozilla ISPDB and to your domain, and as a last resort to a public DNS-over-HTTPS resolver, so your address's domain leaves your machine during `add`. `--host` skips all of it. Details in `SECURITY.md`.
-- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use. The test suite (96 tests, no network; the token endpoint, the browser round trip and the window are exercised with fakes) runs on Linux, macOS and Windows in CI.
+- Tested against Dovecot (All-Inkl), Gmail and Fastmail servers for discovery; the read, draft and tidy paths against a Dovecot mailbox in daily use, and the Microsoft path against a Microsoft 365 user mailbox and a shared mailbox. The test suite (96 tests, no network; the token endpoint, the browser round trip and the window are exercised with fakes) runs on Linux, macOS and Windows in CI.
 
 ## Development
 
